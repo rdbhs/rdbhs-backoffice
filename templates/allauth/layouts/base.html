@@ -1,0 +1,28 @@
+{% load static %}
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>{% block head_title %}Sign in{% endblock %} | RDBHS Backoffice</title>
+  <link rel="icon" type="image/png" href="{% static 'img/rdbhs-icon.png' %}">
+  <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@tabler/core@1.4.0/dist/css/tabler.min.css">
+  <link rel="stylesheet" href="{% static 'css/app.css' %}">
+  {% block extra_head %}{% endblock %}
+</head>
+<body class="d-flex flex-column">
+  <main class="page page-center">
+    <div class="container container-tight py-4">
+      <div class="text-center mb-4">
+        <a href="{% url 'home' %}"><img src="{% static 'img/rdbhs-logo.jpg' %}" width="240" class="img-fluid" alt="Right Direction Behavioral Health Services"></a>
+        <h1 class="h2 mt-3">Backoffice</h1>
+      </div>
+      {% include "includes/messages.html" %}
+      <div class="card card-md"><div class="card-body">
+        {% block content %}{% endblock %}
+      </div></div>
+    </div>
+  </main>
+  {% block extra_body %}{% endblock %}
+</body>
+</html>

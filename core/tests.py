@@ -133,7 +133,7 @@ class EmployeeCrudTests(TestCase):
         self.client.logout()
         response = self.client.get(reverse("employee-list"))
         self.assertEqual(response.status_code, 302)
-        self.assertTrue(response.url.startswith(reverse("admin:login")))
+        self.assertTrue(response.url.startswith(reverse("account_login")))
         user = get_user_model().objects.create_user(username="viewer")
         self.client.force_login(user)
         self.assertEqual(self.client.get(reverse("employee-list")).status_code, 403)
@@ -361,3 +361,131 @@ class TablerModelFormTests(TestCase):
         self.assertEqual(widget.attrs["class"], "custom")
         self.assertEqual(widget.attrs["rows"], 7)
         self.assertEqual(EmploymentTypeForm().fields["description"].widget.attrs["rows"], 3)
+
+
+class AuthenticationTests(TestCase):
+    @classmethod
+    def setUpTestData(cls):
+        cls.user = get_user_model().objects.create_user(
+            username="local-operator", email="operator@example.com",
+            password="test-password",
+        )
+
+    def test_login_page_and_local_login(self):
+        response = self.client.get(reverse("account_login"))
+        self.assertContains(response, "Sign in with Microsoft")
+        self.assertContains(response, "Username")
+        self.assertTemplateUsed(response, "account/login.html")
+        response = self.client.post(reverse("account_login"), {
+            "login": self.user.username, "password": "test-password",
+        })
+        self.assertEqual(response.status_code, 302)
+        self.assertEqual(response.url, reverse("employee-list"))
+        self.assertEqual(int(self.client.session["_auth_user_id"]), self.user.pk)
+
+    def test_login_preserves_next_and_rejects_external_redirects(self):
+        for target, expected in [
+            (reverse("employment_type-list"), reverse("employment_type-list")),
+            ("https://example.com/", reverse("employee-list")),
+        ]:
+            with self.subTest(target=target):
+                self.client.logout()
+                response = self.client.get(reverse("account_login"), {"next": target})
+                if target == expected:
+                    self.assertContains(response, f'value="{target}"')
+                response = self.client.post(reverse("account_login"), {
+                    "login": self.user.username, "password": "test-password",
+                    "next": target,
+                })
+                self.assertEqual(response.url, expected)
+
+    def test_incorrect_credentials(self):
+        response = self.client.post(reverse("account_login"), {
+            "login": self.user.username, "password": "incorrect-password",
+        })
+        self.assertEqual(response.status_code, 200)
+        self.assertTrue(response.context["form"].non_field_errors())
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_logout_requires_post(self):
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(reverse("account_logout")).status_code, 200)
+        self.assertIn("_auth_user_id", self.client.session)
+        response = self.client.post(reverse("account_logout"))
+        self.assertRedirects(response, reverse("account_login"))
+        self.assertNotIn("_auth_user_id", self.client.session)
+
+    def test_frontend_permissions_and_admin_login(self):
+        from django.contrib.auth.models import Permission
+
+        for name in ["employee", "employment_type", "productivity_goal"]:
+            response = self.client.get(reverse(f"{name}-list"))
+            self.assertEqual(response.url,
+                f'{reverse("account_login")}?next={reverse(f"{name}-list")}')
+        self.client.force_login(self.user)
+        self.assertEqual(self.client.get(reverse("employee-list")).status_code, 403)
+        self.user.user_permissions.add(Permission.objects.get(codename="view_employee"))
+        response = self.client.get(reverse("employee-list"))
+        self.assertEqual(response.status_code, 200)
+        self.assertContains(response, 'action="/accounts/logout/"')
+        self.assertContains(response, self.user.email)
+        self.client.logout()
+        self.assertEqual(self.client.get(reverse("admin:login")).status_code, 200)
+
+    def test_csrf_protection(self):
+        from django.test import Client
+
+        client = Client(enforce_csrf_checks=True)
+        self.assertEqual(client.post(reverse("account_login"), {
+            "login": self.user.username, "password": "test-password",
+        }).status_code, 403)
+        client.force_login(self.user)
+        self.assertEqual(client.post(reverse("account_logout")).status_code, 403)
+
+    def test_microsoft_provider_uses_tenant_and_actual_callback(self):
+        from urllib.parse import parse_qs, urlsplit
+        from django.test import override_settings
+
+        tenant = "11111111-2222-3333-4444-555555555555"
+        providers = {"microsoft": {"APPS": [{
+            "client_id": "test-client", "secret": "test-secret",
+            "settings": {"tenant": tenant},
+        }]}}
+        with override_settings(SOCIALACCOUNT_PROVIDERS=providers):
+            response = self.client.get(reverse("account_login"))
+            self.assertContains(response, 'action="/accounts/microsoft/login/"')
+            response = self.client.post(reverse("microsoft_login"))
+            self.assertEqual(response.status_code, 302)
+            url = urlsplit(response.url)
+            self.assertEqual(url.netloc, "login.microsoftonline.com")
+            self.assertEqual(url.path, f"/{tenant}/oauth2/v2.0/authorize")
+            query = parse_qs(url.query)
+            self.assertEqual(query["response_type"], ["code"])
+            self.assertEqual(query["redirect_uri"],
+                ["http://testserver/accounts/microsoft/login/callback/"])
+            self.assertIn("User.Read", query["scope"][0])
+            self.assertIn("state", query)
+        self.assertEqual(reverse("microsoft_callback"),
+            "/accounts/microsoft/login/callback/")
+
+    def test_matching_email_does_not_implicitly_link_accounts(self):
+        from allauth.account.models import EmailAddress
+        from allauth.socialaccount.internal.flows.signup import process_auto_signup_email
+        from allauth.socialaccount.models import SocialAccount, SocialLogin
+        from django.test import RequestFactory
+        from django.conf import settings
+
+        self.assertFalse(settings.SOCIALACCOUNT_EMAIL_AUTHENTICATION)
+        self.assertFalse(settings.SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT)
+        pending = SocialLogin(
+            user=get_user_model()(email=self.user.email),
+            account=SocialAccount(provider="microsoft", uid="test-microsoft-id"),
+            email_addresses=[EmailAddress(email=self.user.email, verified=True)],
+        )
+        allowed, response = process_auto_signup_email(
+            RequestFactory().get("/accounts/microsoft/login/callback/"), pending,
+        )
+        self.assertFalse(allowed)
+        self.assertIsNone(response)
+        self.assertEqual(get_user_model().objects.count(), 1)
+        self.assertFalse(SocialAccount.objects.exists())

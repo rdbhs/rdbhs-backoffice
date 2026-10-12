@@ -1,0 +1,11 @@
+{% extends "account/base_entrance.html" %}
+{% block head_title %}Logout{% endblock %}
+{% block content %}
+<h2 class="h3">Logout</h2>
+<p>Are you sure you want to log out?</p>
+<form method="post" action="{% url 'account_logout' %}">
+  {% csrf_token %}
+  <button class="btn btn-primary" type="submit">Logout</button>
+  <a class="btn" href="{% url 'employee-list' %}">Cancel</a>
+</form>
+{% endblock %}

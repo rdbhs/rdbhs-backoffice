@@ -10,7 +10,11 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 from pathlib import Path
+from uuid import UUID
+
+from django.core.exceptions import ImproperlyConfigured
 
 import dj_database_url
 from dotenv import load_dotenv
@@ -41,6 +45,10 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.microsoft",
     "core",
     "crud_views",
     "django_tables2",
@@ -54,6 +62,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -75,7 +84,42 @@ TEMPLATES = [
 ]
 
 WSGI_APPLICATION = "rdbhs_backoffice.wsgi.application"
-LOGIN_URL = "admin:login"
+LOGIN_URL = "account_login"
+LOGIN_REDIRECT_URL = "employee-list"
+LOGOUT_REDIRECT_URL = "account_login"
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
+
+ACCOUNT_LOGIN_METHODS = {"username"}
+ACCOUNT_SIGNUP_FIELDS = ["email*", "username*", "password1*", "password2*"]
+ACCOUNT_EMAIL_VERIFICATION = "none"
+ACCOUNT_UNIQUE_EMAIL = True
+ACCOUNT_LOGOUT_ON_GET = False
+ACCOUNT_FORMS = {"login": "core.auth_forms.LoginForm"}
+SOCIALACCOUNT_LOGIN_ON_GET = False
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = False
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = False
+
+MICROSOFT_CLIENT_ID = os.getenv("MICROSOFT_CLIENT_ID", "")
+MICROSOFT_CLIENT_SECRET = os.getenv("MICROSOFT_CLIENT_SECRET", "")
+MICROSOFT_TENANT_ID = os.getenv("MICROSOFT_TENANT_ID", "")
+SOCIALACCOUNT_PROVIDERS = {"microsoft": {"APPS": []}}
+if all((MICROSOFT_CLIENT_ID, MICROSOFT_CLIENT_SECRET, MICROSOFT_TENANT_ID)):
+    try:
+        UUID(MICROSOFT_TENANT_ID)
+    except ValueError as exc:
+        raise ImproperlyConfigured(
+            "MICROSOFT_TENANT_ID must be the Directory (tenant) ID UUID."
+        ) from exc
+    SOCIALACCOUNT_PROVIDERS["microsoft"]["APPS"] = [
+        {
+            "client_id": MICROSOFT_CLIENT_ID,
+            "secret": MICROSOFT_CLIENT_SECRET,
+            "settings": {"tenant": MICROSOFT_TENANT_ID},
+        }
+    ]
 
 
 # Database

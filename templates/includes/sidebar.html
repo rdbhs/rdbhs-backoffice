@@ -35,5 +35,15 @@
         </li>
       </ul>
     </nav>
+    {% if user.is_authenticated %}
+    <div class="mt-3 px-3">
+      <div class="small text-break">{{ user.email|default:user.username }}</div>
+      <a class="nav-link mt-2" href="{% url 'socialaccount_connections' %}">Account connections</a>
+      <form method="post" action="{% url 'account_logout' %}" class="mt-2">
+        {% csrf_token %}
+        <button class="btn btn-sm btn-outline-light" type="submit">Logout</button>
+      </form>
+    </div>
+    {% endif %}
   </div>
 </aside>
