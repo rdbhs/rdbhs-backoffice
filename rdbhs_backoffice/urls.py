@@ -17,7 +17,42 @@ Including another URLconf
 
 from django.contrib import admin
 from django.urls import path
+from django.views.generic import RedirectView
+from viewflow.contrib.auth import AuthViewset
+from viewflow.urls import Application, Site
+
+from core.viewsets import (
+    EmployeeViewset,
+    EmploymentTypeViewset,
+    ProductivityGoalViewset,
+)
+
+core = Application(
+    title="RDBHS Backoffice",
+    app_name="core",
+    icon="health_and_safety",
+    viewsets=[
+        EmployeeViewset(),
+        EmploymentTypeViewset(),
+        ProductivityGoalViewset(),
+    ],
+)
+
+site = Site(
+    title="RDBHS Backoffice",
+    primary_color="#2F7D5A",
+    secondary_color="#4E6E64",
+    viewsets=[core],
+    urlpatterns=[
+        path("", RedirectView.as_view(pattern_name="core:index"), name="index"),
+        path(
+            "accounts/",
+            AuthViewset(allow_password_change=False, with_profile_view=False).urls,
+        ),
+    ],
+)
 
 urlpatterns = [
     path("admin/", admin.site.urls),
+    path("", site.urls),
 ]
