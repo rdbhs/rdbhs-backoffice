@@ -1,0 +1,53 @@
+{% extends "viewflow/views/detail.html" %}
+
+{% block content %}
+  <div class="vf-page__grid">
+  {{ block.super }}
+  <div class="mdc-layout-grid vf-page__grid">
+    <div class="mdc-layout-grid__inner">
+      <div class="mdc-layout-grid__cell mdc-layout-grid__cell--span-10-desktop mdc-layout-grid__cell--span-8-tablet mdc-layout-grid__cell--span-4-phone">
+        <div class="mdc-card vf-card">
+          <section class="vf-card__header">
+            <h2 class="vf-card__title">Productivity Goals</h2>
+          </section>
+
+          <div class="mdc-data-table">
+            <div class="mdc-data-table__table-container">
+              <table class="mdc-data-table__table" aria-label="Productivity Goals">
+                <thead>
+                  <tr class="mdc-data-table__header-row">
+                    <th class="mdc-data-table__header-cell" scope="col">Employment Type</th>
+                    <th class="mdc-data-table__header-cell" scope="col">Minimum Hours</th>
+                    <th class="mdc-data-table__header-cell" scope="col">Effective From</th>
+                    <th class="mdc-data-table__header-cell" scope="col">Effective To</th>
+                    <th class="mdc-data-table__header-cell" scope="col">Edit</th>
+                  </tr>
+                </thead>
+                <tbody class="mdc-data-table__content">
+                  {% for row in productivity_goal_rows %}
+                    <tr class="mdc-data-table__row">
+                      <td class="mdc-data-table__cell">{{ row.goal.employment_type }}</td>
+                      <td class="mdc-data-table__cell">{{ row.goal.minimum_hours }}</td>
+                      <td class="mdc-data-table__cell">{{ row.goal.effective_from }}</td>
+                      <td class="mdc-data-table__cell">{{ row.goal.effective_to|default_if_none:"—" }}</td>
+                      <td class="mdc-data-table__cell">{% if row.edit_url %}<a class="mdc-button" href="{{ row.edit_url }}"><span class="mdc-button__label">Edit</span></a>{% endif %}</td>
+                    </tr>
+                  {% empty %}
+                    <tr class="mdc-data-table__row"><td class="mdc-data-table__cell" colspan="5">No productivity goals.</td></tr>
+                  {% endfor %}
+                </tbody>
+              </table>
+            </div>
+          </div>
+
+          {% if add_productivity_goal_url %}
+            <section class="mdc-card__actions vf-card__actions">
+              <a class="mdc-button mdc-card__action mdc-card__action--button" href="{{ add_productivity_goal_url }}">Add Productivity Goal</a>
+            </section>
+          {% endif %}
+        </div>
+      </div>
+    </div>
+  </div>
+  </div>
+{% endblock %}
