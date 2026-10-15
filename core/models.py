@@ -1,4 +1,7 @@
-from django.db import models
+from datetime import timedelta
+
+from django.core.exceptions import ValidationError
+from django.db import models, router, transaction
 
 
 class EmploymentType(models.Model):
@@ -60,6 +63,101 @@ class ProductivityGoal(models.Model):
     updated_at = models.DateTimeField(auto_now=True)
 
     objects = ProductivityGoalManager()
+
+    def _timeline_neighbors(self):
+        goals = (
+            type(self)
+            .objects.using(self._state.db)
+            .filter(employee_id=self.employee_id)
+        )
+        previous = (
+            goals.filter(effective_from__lt=self.effective_from)
+            .filter(
+                models.Q(effective_to__isnull=True)
+                | models.Q(effective_to__gte=self.effective_from)
+            )
+            .order_by("-effective_from")
+            .first()
+        )
+        following = (
+            goals.filter(effective_from__gt=self.effective_from)
+            .order_by("effective_from")
+            .first()
+        )
+        return previous, following
+
+    def clean(self):
+        super().clean()
+        if (
+            self.effective_from
+            and self.effective_to
+            and self.effective_to < self.effective_from
+        ):
+            raise ValidationError(
+                {"effective_to": "Effective to must be on or after effective from."}
+            )
+        if not self.employee_id or not self.effective_from:
+            return
+        goals = (
+            type(self)
+            .objects.using(self._state.db)
+            .filter(employee_id=self.employee_id)
+        )
+        if self.pk is not None:
+            goals = goals.exclude(pk=self.pk)
+        if goals.filter(effective_from=self.effective_from).exists():
+            raise ValidationError(
+                {"effective_from": "A productivity goal already starts on this date."}
+            )
+        end = self.effective_to
+        if getattr(self, "_validate_timeline_creation", False):
+            # The create form validates the planned timeline without writing it.
+            previous, following = self._timeline_neighbors()
+            if previous:
+                goals = goals.exclude(pk=previous.pk)
+            if following:
+                end = following.effective_from - timedelta(days=1)
+            else:
+                end = None
+        overlaps = goals.filter(
+            models.Q(effective_to__isnull=True)
+            | models.Q(effective_to__gte=self.effective_from)
+        )
+        if end is not None:
+            overlaps = overlaps.filter(effective_from__lte=end)
+        if overlaps.exists():
+            raise ValidationError(
+                "This productivity goal overlaps another goal for this employee."
+            )
+
+    def create_in_timeline(self):
+        """Insert this unsaved goal and adjust its neighbors atomically."""
+        if not self._state.adding:
+            raise ValueError("Timeline creation requires a new productivity goal.")
+        database = router.db_for_write(type(self), instance=self)
+        self._state.db = database
+        with transaction.atomic(using=database):
+            Employee.objects.using(database).select_for_update().get(
+                pk=self.employee_id
+            )
+            # Ignore caller-supplied end dates before validation, too.
+            self.effective_to = None
+            self._validate_timeline_creation = True
+            try:
+                self.full_clean()
+            finally:
+                self._validate_timeline_creation = False
+            previous, following = self._timeline_neighbors()
+            if previous:
+                previous.effective_to = self.effective_from - timedelta(days=1)
+                previous.save(update_fields=["effective_to", "updated_at"])
+            if following:
+                self.effective_to = following.effective_from - timedelta(days=1)
+            else:
+                self.effective_to = None
+            self.full_clean()
+            self.save(force_insert=True, using=database)
+        return self
 
     class Meta:
         ordering = ["employee__last_name", "employee__first_name", "-effective_from"]
