@@ -5,8 +5,8 @@ from django.core.exceptions import ValidationError
 from django.forms import modelform_factory
 from django.test import TestCase
 
-from .forms import ProductivityGoalCreateForm
-from .models import Employee, EmploymentType, ProductivityGoal
+from ..forms import ProductivityGoalCreateForm
+from ..models import Employee, EmploymentType, ProductivityGoal
 
 
 class ProductivityGoalTests(TestCase):
