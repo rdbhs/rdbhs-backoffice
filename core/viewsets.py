@@ -14,6 +14,7 @@ class EmployeeViewset(DetailViewMixin, DeleteViewMixin, ModelViewset):
     icon = "people"
     list_columns = ("last_name", "first_name", "email", "is_active")
     list_filter_fields = ("is_active",)
+    list_search_fields = ("first_name", "last_name")
 
 
 class EmploymentTypeViewset(DetailViewMixin, DeleteViewMixin, ModelViewset):
@@ -39,6 +40,7 @@ class ProductivityGoalViewset(DetailViewMixin, DeleteViewMixin, ModelViewset):
         "effective_to",
     )
     list_filter_fields = ("employment_type",)
+    list_search_fields = ("employee__first_name", "employee__last_name")
 
     def get_employee_context(self, request):
         employee_pk = request.GET.get("employee")
@@ -49,7 +51,8 @@ class ProductivityGoalViewset(DetailViewMixin, DeleteViewMixin, ModelViewset):
         except (ValueError, ValidationError):
             return None
         employee_viewset = next(
-            viewset for viewset in self.parent.viewsets
+            viewset
+            for viewset in self.parent.viewsets
             if getattr(viewset, "model", None) is Employee
         )
         if employee and employee_viewset.has_view_permission(request.user, employee):
