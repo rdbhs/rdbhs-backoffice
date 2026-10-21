@@ -29,6 +29,7 @@ from core.viewsets import (
 
 core = Application(
     title="RDBHS Backoffice",
+    base_template_name="core/base_page.html",
     app_name="core",
     icon="health_and_safety",
     viewsets=[
