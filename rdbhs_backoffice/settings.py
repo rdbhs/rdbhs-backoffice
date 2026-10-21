@@ -10,9 +10,11 @@ For the full list of settings and their values, see
 https://docs.djangoproject.com/en/6.1/ref/settings/
 """
 
+import os
 from pathlib import Path
 
 import dj_database_url
+from django.core.exceptions import ImproperlyConfigured
 from dotenv import load_dotenv
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
@@ -23,13 +25,27 @@ load_dotenv(BASE_DIR / ".env")
 # Quick-start development settings - unsuitable for production
 # See https://docs.djangoproject.com/en/6.1/howto/deployment/checklist/
 
-# SECURITY WARNING: keep the secret key used in production secret!
-SECRET_KEY = "django-insecure-%qaq%l8i+yo+1j5%nuf!)rdg8vc!)44^s56jtd^!$oe2)v8irw"
+SECRET_KEY = os.environ.get("SECRET_KEY", "")
+if not SECRET_KEY.strip():
+    raise ImproperlyConfigured("SECRET_KEY environment variable is required.")
 
-# SECURITY WARNING: don't run with debug turned on in production!
-DEBUG = True
+debug_value = os.environ.get("DEBUG", "false").strip().lower()
+if debug_value not in {"true", "false", "1", "0", "yes", "no", "on", "off"}:
+    raise ImproperlyConfigured(
+        "DEBUG must be one of: true, false, 1, 0, yes, no, on, off."
+    )
+DEBUG = debug_value in {"true", "1", "yes", "on"}
 
-ALLOWED_HOSTS = []
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.environ.get("ALLOWED_HOSTS", "").split(",")
+    if host.strip()
+]
+CSRF_TRUSTED_ORIGINS = [
+    origin.strip()
+    for origin in os.environ.get("CSRF_TRUSTED_ORIGINS", "").split(",")
+    if origin.strip()
+]
 
 
 # Application definition
