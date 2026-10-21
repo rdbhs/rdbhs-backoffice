@@ -47,6 +47,13 @@ CSRF_TRUSTED_ORIGINS = [
     if origin.strip()
 ]
 
+# Caddy must overwrite X-Forwarded-Proto; keep Gunicorn bound to loopback.
+SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
+SESSION_COOKIE_SECURE = not DEBUG
+CSRF_COOKIE_SECURE = not DEBUG
+SECURE_SSL_REDIRECT = not DEBUG
+# Enable HSTS only after the HTTPS deployment has been verified.
+
 
 # Application definition
 
@@ -98,7 +105,10 @@ LOGOUT_REDIRECT_URL = "/accounts/login/"
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
-DATABASES = {"default": dj_database_url.config()}
+database_url = os.environ.get("DATABASE_URL", "").strip()
+if not database_url:
+    raise ImproperlyConfigured("DATABASE_URL environment variable is required and must not be empty.")
+DATABASES = {"default": dj_database_url.parse(database_url)}
 
 
 # Password validation
@@ -136,6 +146,7 @@ USE_TZ = True
 # https://docs.djangoproject.com/en/6.1/howto/static-files/
 
 STATIC_URL = "static/"
+STATIC_ROOT = Path(os.environ.get("STATIC_ROOT", BASE_DIR / "staticfiles"))
 
 
 # Email
@@ -143,6 +154,7 @@ STATIC_URL = "static/"
 
 MAILERS = {
     "default": {
-        "BACKEND": "django.core.mail.backends.console.EmailBackend",
+        # No delivery in v1; unexpected send attempts fail explicitly.
+        "BACKEND": "rdbhs_backoffice.mail.DisabledEmailBackend",
     },
 }

@@ -8,5 +8,7 @@ dependencies = [
     "dj-database-url>=3.1.2",
     "django>=6.1.2",
     "django-viewflow>=2.4.0",
+    "gunicorn>=26.2.0",
+    "psycopg[binary]>=3.1.12",
     "python-dotenv>=1.2.4",
 ]
