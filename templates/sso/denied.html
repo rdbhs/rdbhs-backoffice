@@ -1,0 +1,6 @@
+{% extends "viewflow/base_lockscreen.html" %}
+{% block lockscreen-sidebar-header-title %}Microsoft sign-in unavailable{% endblock %}
+{% block lockscreen-sidebar-content %}
+  <p>Microsoft sign-in could not be completed. An active account with an authorized corporate identity is required. Contact your administrator.</p>
+  <a href="{% url 'login' %}">Return to username/password login</a>
+{% endblock %}

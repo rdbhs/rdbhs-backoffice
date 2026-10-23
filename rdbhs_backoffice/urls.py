@@ -26,6 +26,7 @@ from core.viewsets import (
     EmploymentTypeViewset,
     ProductivityGoalViewset,
 )
+from rdbhs_backoffice.sso import microsoft_callback, microsoft_login
 
 core = Application(
     title="RDBHS Backoffice",
@@ -54,6 +55,12 @@ site = Site(
 )
 
 urlpatterns = [
+    path("accounts/microsoft/login/", microsoft_login, name="microsoft_login"),
+    path(
+        "accounts/microsoft/login/callback/",
+        microsoft_callback,
+        name="microsoft_callback",
+    ),
     path("admin/", admin.site.urls),
     path("", site.urls),
 ]

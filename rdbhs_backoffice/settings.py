@@ -12,6 +12,7 @@ https://docs.djangoproject.com/en/6.1/ref/settings/
 
 import os
 from pathlib import Path
+from uuid import UUID
 
 import dj_database_url
 from django.core.exceptions import ImproperlyConfigured
@@ -52,7 +53,8 @@ SECURE_PROXY_SSL_HEADER = ("HTTP_X_FORWARDED_PROTO", "https")
 SESSION_COOKIE_SECURE = not DEBUG
 CSRF_COOKIE_SECURE = not DEBUG
 SECURE_SSL_REDIRECT = not DEBUG
-# Enable HSTS only after the HTTPS deployment has been verified.
+# Preserve production HSTS in source; its duration remains environment-controlled.
+SECURE_HSTS_SECONDS = int(os.environ.get("SECURE_HSTS_SECONDS", "0"))
 
 
 # Application definition
@@ -66,6 +68,10 @@ INSTALLED_APPS = [
     "django.contrib.staticfiles",
     "viewflow",
     "core",
+    "allauth",
+    "allauth.account",
+    "allauth.socialaccount",
+    "allauth.socialaccount.providers.microsoft",
 ]
 
 MIDDLEWARE = [
@@ -75,6 +81,7 @@ MIDDLEWARE = [
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
     "django.contrib.messages.middleware.MessageMiddleware",
+    "allauth.account.middleware.AccountMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
 ]
 
@@ -83,13 +90,14 @@ ROOT_URLCONF = "rdbhs_backoffice.urls"
 TEMPLATES = [
     {
         "BACKEND": "django.template.backends.django.DjangoTemplates",
-        "DIRS": [],
+        "DIRS": [BASE_DIR / "templates"],
         "APP_DIRS": True,
         "OPTIONS": {
             "context_processors": [
                 "django.template.context_processors.request",
                 "django.contrib.auth.context_processors.auth",
                 "django.contrib.messages.context_processors.messages",
+                "rdbhs_backoffice.sso.login_context",
             ],
         },
     },
@@ -101,13 +109,65 @@ LOGIN_URL = "/accounts/login/"
 LOGIN_REDIRECT_URL = "/"
 LOGOUT_REDIRECT_URL = "/accounts/login/"
 
+# Preserve Viewflow password login and Django authorization.
+AUTHENTICATION_BACKENDS = [
+    "django.contrib.auth.backends.ModelBackend",
+    "allauth.account.auth_backends.AuthenticationBackend",
+]
+ACCOUNT_ADAPTER = "rdbhs_backoffice.sso.ClosedAccountAdapter"
+SOCIALACCOUNT_ADAPTER = "rdbhs_backoffice.sso.CorporateSocialAccountAdapter"
+ACCOUNT_EMAIL_VERIFICATION = "none"
+ACCOUNT_EMAIL_NOTIFICATIONS = False
+SOCIALACCOUNT_EMAIL_VERIFICATION = "none"
+SOCIALACCOUNT_AUTO_SIGNUP = False
+SOCIALACCOUNT_EMAIL_AUTHENTICATION = False
+SOCIALACCOUNT_EMAIL_AUTHENTICATION_AUTO_CONNECT = False
+SOCIALACCOUNT_STORE_TOKENS = False
+SOCIALACCOUNT_LOGIN_ON_GET = False
+
+sso_value = os.environ.get("SSO_ENABLED", "false").strip().lower()
+if sso_value not in {"true", "false", "1", "0", "yes", "no", "on", "off"}:
+    raise ImproperlyConfigured("SSO_ENABLED must be a boolean.")
+SSO_ENABLED = sso_value in {"true", "1", "yes", "on"}
+ENTRA_TENANT_ID = os.environ.get("ENTRA_TENANT_ID", "").strip()
+ENTRA_CLIENT_ID = os.environ.get("ENTRA_CLIENT_ID", "").strip()
+ENTRA_CLIENT_SECRET = os.environ.get("ENTRA_CLIENT_SECRET", "").strip()
+if SSO_ENABLED:
+    try:
+        ENTRA_TENANT_ID = str(UUID(ENTRA_TENANT_ID))
+        ENTRA_CLIENT_ID = str(UUID(ENTRA_CLIENT_ID))
+    except ValueError as error:
+        raise ImproperlyConfigured(
+            "ENTRA_TENANT_ID and ENTRA_CLIENT_ID must be UUIDs when SSO is enabled."
+        ) from error
+    if not ENTRA_CLIENT_SECRET:
+        raise ImproperlyConfigured(
+            "ENTRA_CLIENT_SECRET is required when SSO is enabled."
+        )
+
+SOCIALACCOUNT_PROVIDERS = {
+    "microsoft": {
+        "provider_class": "rdbhs_backoffice.sso.CorporateMicrosoftProvider",
+        "OAUTH_PKCE_ENABLED": True,
+        "APPS": [
+            {
+                "client_id": ENTRA_CLIENT_ID,
+                "secret": ENTRA_CLIENT_SECRET,
+                "settings": {"tenant": ENTRA_TENANT_ID},
+            }
+        ],
+    },
+}
+
 
 # Database
 # https://docs.djangoproject.com/en/6.1/ref/settings/#databases
 
 database_url = os.environ.get("DATABASE_URL", "").strip()
 if not database_url:
-    raise ImproperlyConfigured("DATABASE_URL environment variable is required and must not be empty.")
+    raise ImproperlyConfigured(
+        "DATABASE_URL environment variable is required and must not be empty."
+    )
 DATABASES = {"default": dj_database_url.parse(database_url)}
 
 

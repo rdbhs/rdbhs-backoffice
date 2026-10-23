@@ -1,0 +1,13 @@
+{% extends "registration/login.html" %}
+
+{% block lockscreen-sidebar-socialaccount %}
+  {% if sso_enabled %}
+    <form method="post" action="{% url 'microsoft_login' %}">
+      {% csrf_token %}
+      {% if next %}<input type="hidden" name="next" value="{{ next }}">{% endif %}
+      <button type="submit" class="mdc-button mdc-button--raised vf-page-lockscreen__sidebar-content-action">
+        Continue with Microsoft
+      </button>
+    </form>
+  {% endif %}
+{% endblock %}
