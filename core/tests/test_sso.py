@@ -1,5 +1,6 @@
 """Exercise the real allauth callback flow with Microsoft HTTP calls mocked."""
 
+import re
 from concurrent.futures import ThreadPoolExecutor
 from copy import deepcopy
 from threading import Barrier
@@ -116,6 +117,22 @@ class MicrosoftLoginTests(TestCase):
         self.assertContains(response, 'method="post" action="/accounts/microsoft/login/"')
         self.assertContains(response, 'name="csrfmiddlewaretoken"')
         self.assertContains(response, 'name="next" value="/employees/"')
+
+    def test_microsoft_form_disables_turbo_and_keeps_post_csrf(self):
+        response = self.client.get("/accounts/login/")
+        form = re.search(
+            r'<form\b[^>]*action="/accounts/microsoft/login/"[^>]*>.*?</form>',
+            response.content.decode(),
+            re.DOTALL,
+        )
+        self.assertIsNotNone(form)
+        self.assertIn('data-turbo="false"', form.group())
+        self.assertIn('method="post"', form.group())
+        self.assertIn("Continue with Microsoft", form.group())
+        self.assertRegex(
+            form.group(), r'name="csrfmiddlewaretoken" value="[^"]+"'
+        )
+        self.assertContains(response, 'data-turbo="false"', count=1)
 
     def test_oauth_start_is_post_csrf_tenant_scoped_and_pkce(self):
         self.assertEqual(self.client.get(reverse("microsoft_login")).status_code, 405)
