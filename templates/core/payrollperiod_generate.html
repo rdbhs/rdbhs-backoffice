@@ -1,0 +1,24 @@
+{% extends 'viewflow/views/form.html' %}
+{% load viewflow %}
+
+{% block form-header-title %}
+  <h1 class="vf-card__title">Generate periods</h1>
+{% endblock %}
+
+{% block breadcrumbs_items %}
+  <a href="{% current_viewset_reverse viewset 'list' %}">Payroll Periods</a>
+  <a>Generate periods</a>
+{% endblock %}
+
+{% block form %}
+  <section class="vf-card__form">
+    <p>Generate missing periods from December 29, 2024 through the end of next year,
+      using {{ business_timezone }}. The final period may end in the following year.</p>
+    <p>Existing records will not be changed. Conflicting periods will be skipped and reported.</p>
+  </section>
+  {{ block.super }}
+{% endblock %}
+
+{% block form-actions-list %}
+  <button class="mdc-button mdc-card__action mdc-card__action--button mdc-button--raised" type="submit">Generate periods</button>
+{% endblock %}

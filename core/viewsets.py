@@ -1,6 +1,7 @@
 from django.core.exceptions import ValidationError
-from django.urls import reverse
+from django.urls import path, reverse
 from viewflow.urls import DeleteViewMixin, DetailViewMixin, ModelViewset
+from viewflow.views import Action
 
 from .models import (
     CompanySettings,
@@ -9,7 +10,11 @@ from .models import (
     PayrollPeriod,
     ProductivityGoal,
 )
-from .views import EmployeeDetailView, ProductivityGoalCreateView
+from .views import (
+    EmployeeDetailView,
+    GeneratePayrollPeriodsView,
+    ProductivityGoalCreateView,
+)
 
 
 class EmployeeViewset(DetailViewMixin, DeleteViewMixin, ModelViewset):
@@ -38,6 +43,22 @@ class PayrollPeriodViewset(DetailViewMixin, DeleteViewMixin, ModelViewset):
     title = "Payroll Periods"
     icon = "date_range"
     list_columns = ("start_date", "end_date", "payment_date")
+
+    @property
+    def generate_path(self):
+        return path(
+            "generate/",
+            GeneratePayrollPeriodsView.as_view(viewset=self),
+            name="generate",
+        )
+
+    def get_list_page_actions(self, request, *actions):
+        if self.has_add_permission(request.user):
+            actions = (
+                Action(name="Generate periods", url=self.reverse("generate")),
+                *actions,
+            )
+        return super().get_list_page_actions(request, *actions)
 
 
 class CompanySettingsViewset(DetailViewMixin, DeleteViewMixin, ModelViewset):
