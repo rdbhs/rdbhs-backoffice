@@ -22,8 +22,10 @@ from viewflow.contrib.auth import AuthViewset
 from viewflow.urls import Application, Site
 
 from core.viewsets import (
+    CompanySettingsViewset,
     EmployeeViewset,
     EmploymentTypeViewset,
+    PayrollPeriodViewset,
     ProductivityGoalViewset,
 )
 from rdbhs_backoffice.sso import microsoft_callback, microsoft_login
@@ -37,6 +39,8 @@ core = Application(
         EmployeeViewset(),
         EmploymentTypeViewset(),
         ProductivityGoalViewset(),
+        PayrollPeriodViewset(),
+        CompanySettingsViewset(),
     ],
 )
 

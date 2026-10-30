@@ -2,7 +2,13 @@ from django.core.exceptions import ValidationError
 from django.urls import reverse
 from viewflow.urls import DeleteViewMixin, DetailViewMixin, ModelViewset
 
-from .models import Employee, EmploymentType, ProductivityGoal
+from .models import (
+    CompanySettings,
+    Employee,
+    EmploymentType,
+    PayrollPeriod,
+    ProductivityGoal,
+)
 from .views import EmployeeDetailView, ProductivityGoalCreateView
 
 
@@ -24,6 +30,28 @@ class EmploymentTypeViewset(DetailViewMixin, DeleteViewMixin, ModelViewset):
     icon = "work"
     list_columns = ("code", "name", "default_minimum_hours", "is_active")
     list_filter_fields = ("is_active",)
+
+
+class PayrollPeriodViewset(DetailViewMixin, DeleteViewMixin, ModelViewset):
+    model = PayrollPeriod
+    app_name = "payroll-periods"
+    title = "Payroll Periods"
+    icon = "date_range"
+    list_columns = ("start_date", "end_date", "payment_date")
+
+
+class CompanySettingsViewset(DetailViewMixin, DeleteViewMixin, ModelViewset):
+    model = CompanySettings
+    app_name = "company-settings"
+    title = "Company Settings"
+    icon = "settings"
+    list_columns = (
+        "effective_from",
+        "effective_to",
+        "appointment_cutoff_days",
+        "appointment_cutoff_time",
+        "timezone",
+    )
 
 
 class ProductivityGoalViewset(DetailViewMixin, DeleteViewMixin, ModelViewset):

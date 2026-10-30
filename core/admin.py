@@ -1,6 +1,12 @@
 from django.contrib import admin
 
-from .models import Employee, EmploymentType, ProductivityGoal
+from .models import (
+    CompanySettings,
+    Employee,
+    EmploymentType,
+    PayrollPeriod,
+    ProductivityGoal,
+)
 
 
 class ProductivityGoalInline(admin.TabularInline):
@@ -34,3 +40,19 @@ class ProductivityGoalAdmin(admin.ModelAdmin):
     ]
     list_filter = ["employment_type", "effective_from"]
     search_fields = ["employee__first_name", "employee__last_name", "employee__email"]
+
+
+@admin.register(PayrollPeriod)
+class PayrollPeriodAdmin(admin.ModelAdmin):
+    list_display = ["start_date", "end_date", "payment_date"]
+
+
+@admin.register(CompanySettings)
+class CompanySettingsAdmin(admin.ModelAdmin):
+    list_display = [
+        "effective_from",
+        "effective_to",
+        "appointment_cutoff_days",
+        "appointment_cutoff_time",
+        "timezone",
+    ]

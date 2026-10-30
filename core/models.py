@@ -175,3 +175,33 @@ class ProductivityGoal(models.Model):
         return (
             f"{self.employee} - {self.minimum_hours} hours from {self.effective_from}"
         )
+
+
+class PayrollPeriod(models.Model):
+    start_date = models.DateField()
+    end_date = models.DateField()
+    payment_date = models.DateField()
+
+    class Meta:
+        ordering = ["start_date", "end_date"]
+        verbose_name = "payroll period"
+        verbose_name_plural = "payroll periods"
+
+    def __str__(self):
+        return f"{self.start_date} - {self.end_date}"
+
+
+class CompanySettings(models.Model):
+    effective_from = models.DateField()
+    effective_to = models.DateField(null=True, blank=True)
+    appointment_cutoff_days = models.PositiveSmallIntegerField()
+    appointment_cutoff_time = models.TimeField()
+    timezone = models.CharField(max_length=64)
+
+    class Meta:
+        ordering = ["-effective_from"]
+        verbose_name = "company settings"
+        verbose_name_plural = "company settings"
+
+    def __str__(self):
+        return f"Company settings from {self.effective_from}"
