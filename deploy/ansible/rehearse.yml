@@ -1,0 +1,126 @@
+---
+- name: Rehearse a release on the local disposable pilot only
+  hosts: localhost
+  connection: local
+  gather_facts: false
+  vars:
+    ansible_python_interpreter: /usr/bin/python3
+    release_dir: "{{ pilot_root }}/releases/{{ release_slot }}"
+  tasks:
+    - name: Restrict the destination to the disposable pilot
+      ansible.builtin.assert:
+        that:
+          - pilot_root is match('^/tmp/rdbhs-cicd-[a-zA-Z0-9_]+$')
+          - release_slot in ['baseline', 'candidate']
+          - lookup('env', 'DATABASE_URL') is match('^postgresql://rdbhs_pilot:')
+          - lookup('env', 'SSO_ENABLED') == 'false'
+        fail_msg: This playbook is exclusively for the disposable local rehearsal.
+
+    - name: Verify the artifact before installation
+      ansible.builtin.command:
+        argv:
+          - /usr/bin/python3
+          - "{{ playbook_dir }}/../verify_release.py"
+          - "{{ bundle_dir }}"
+          - --expected-commit
+          - "{{ expected_commit }}"
+      changed_when: false
+
+    - name: Read the previously active release
+      ansible.builtin.stat:
+        path: "{{ pilot_root }}/current"
+        follow: false
+      register: previous
+
+    - name: Install and activate candidate
+      block:
+        - name: Extract the verified application
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - "{{ playbook_dir }}/../verify_release.py"
+              - "{{ bundle_dir }}"
+              - --expected-commit
+              - "{{ expected_commit }}"
+              - --extract
+              - "{{ release_dir }}"
+          changed_when: true
+
+        - name: Install locked runtime dependencies in its own environment
+          ansible.builtin.command:
+            argv: ["{{ uv_binary }}", sync, --locked, --no-dev, --python, "{{ runtime_python }}"]
+            chdir: "{{ release_dir }}"
+          environment:
+            UV_PROJECT_ENVIRONMENT: "{{ release_dir }}/.venv"
+            UV_LINK_MODE: copy
+          changed_when: true
+
+        - name: Check application and migration definitions
+          ansible.builtin.command:
+            argv: ["{{ release_dir }}/.venv/bin/python", manage.py, "{{ item }}"]
+            chdir: "{{ release_dir }}"
+          loop: [check]
+          changed_when: false
+
+        - name: Apply migrations to the disposable database
+          ansible.builtin.command:
+            argv: ["{{ release_dir }}/.venv/bin/python", manage.py, migrate, --noinput]
+            chdir: "{{ release_dir }}"
+          changed_when: true
+
+        - name: Collect static files inside the release
+          ansible.builtin.command:
+            argv: ["{{ release_dir }}/.venv/bin/python", manage.py, collectstatic, --noinput]
+            chdir: "{{ release_dir }}"
+          environment:
+            STATIC_ROOT: "{{ release_dir }}/staticfiles"
+          changed_when: true
+
+        - name: Prepare next activation link
+          ansible.builtin.file:
+            src: "{{ release_dir }}"
+            dest: "{{ pilot_root }}/current.next"
+            state: link
+
+        - name: Activate with an atomic link replacement
+          ansible.builtin.command:
+            argv: [mv, -Tf, "{{ pilot_root }}/current.next", "{{ pilot_root }}/current"]
+          changed_when: true
+
+        - name: Check the activated application with Gunicorn
+          ansible.builtin.command:
+            argv:
+              - /usr/bin/python3
+              - "{{ playbook_dir }}/../smoke.py"
+              - "{{ pilot_root }}/current"
+              - "{{ pilot_root }}/{{ release_slot }}.sock"
+          changed_when: false
+
+        - name: Exercise the failure path when requested by the harness
+          ansible.builtin.assert:
+            that: not (inject_failure | default(false) | bool)
+            fail_msg: Synthetic post-activation failure for rollback rehearsal.
+
+      rescue:
+        - name: Prepare previous activation link
+          ansible.builtin.file:
+            src: "{{ previous.stat.lnk_source }}"
+            dest: "{{ pilot_root }}/current.rollback"
+            state: link
+          when: previous.stat.islnk | default(false)
+
+        - name: Restore previous activation atomically
+          ansible.builtin.command:
+            argv: [mv, -Tf, "{{ pilot_root }}/current.rollback", "{{ pilot_root }}/current"]
+          changed_when: true
+          when: previous.stat.islnk | default(false)
+
+        - name: Remove activation after a failed first installation
+          ansible.builtin.file:
+            path: "{{ pilot_root }}/current"
+            state: absent
+          when: not (previous.stat.islnk | default(false))
+
+        - name: Report failure even after restoring the link
+          ansible.builtin.fail:
+            msg: Candidate failed. Previous link restored when available. Database migrations were not reversed.
